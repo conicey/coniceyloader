@@ -1,5 +1,6 @@
--- Conicey Loader - Autofarm + Webhook (Works in PlayerGui, Instant Load)
--- Toggle GUI with K key | Autofarm collects nearest coins/gems/orbs/drops
+-- Conicey Loader - Autokill + Webhook (KAT Kill Aura: Teleports to nearest player)
+-- Toggle GUI with K | 💀 Autokill: Kills nearest enemy automatically
+-- Works in Knife Ability Test (KAT) & similar PvP games
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -9,11 +10,17 @@ local StarterGui = game:GetService("StarterGui")
 local LocalPlayer = Players.LocalPlayer
 
 local startTime = tick()
-local autofarmEnabled = false
-local webhookUrl = ""  -- Paste your Discord webhook here or use GUI input
-local guiVisible = true   -- starts visible
+local autokillEnabled = false
+local webhookUrl = ""
+local guiVisible = true
 
--- Timer function
+-- Speed/Jump boost vars
+local defaultSpeed = 16
+local defaultJump = 50
+local killSpeed = 80
+local killJump = 100
+
+-- Timer
 local function getUptime()
     local elapsed = tick() - startTime
     local days = math.floor(elapsed / 86400)
@@ -23,7 +30,7 @@ local function getUptime()
     return string.format("%02d:%02d:%02d:%02d", days, hours, minutes, seconds)
 end
 
--- Get stat from leaderstats or Data
+-- Get stat
 local function getStat(statName)
     for _, folder in pairs({LocalPlayer:FindFirstChild("leaderstats"), LocalPlayer:FindFirstChild("Data")}) do
         if folder and folder:FindFirstChild(statName) then
@@ -33,7 +40,7 @@ local function getStat(statName)
     return 0
 end
 
--- Send Discord webhook log
+-- Webhook
 local function sendWebhook()
     if webhookUrl == "" then return end
     local gems = getStat("Gems") or getStat("Coins") or getStat("Money") or 0
@@ -52,50 +59,71 @@ local function sendWebhook()
     }
     pcall(function()
         local req = syn and syn.request or http and http.request or request or HttpService.PostAsync
-        if req == HttpService.PostAsync then
-            HttpService:PostAsync(webhookUrl, HttpService:JSONEncode(embed))
-        else
+        if type(req) == "function" and req ~= HttpService.PostAsync then
             req({Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(embed)})
+        else
+            HttpService:PostAsync(webhookUrl, HttpService:JSONEncode(embed))
         end
     end)
     StarterGui:SetCore("SendNotification", {Title = "Conicey Loader", Text = "Log sent!", Duration = 3})
 end
 
--- Improved Autofarm (collect nearest collectible)
+-- 💀 AUTOKILL / KILL AURA LOOP (for KAT/PvP)
 spawn(function()
     while true do
-        if autofarmEnabled and LocalPlayer.Character then
-            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                local nearest, minDist = nil, 80  -- increased range a bit
-                for _, v in pairs(workspace:GetDescendants()) do
-                    if v:IsA("BasePart") or v:IsA("MeshPart") then
-                        local nameLower = v.Name:lower()
-                        if nameLower:find("coin") or nameLower:find("gem") or nameLower:find("orb") or nameLower:find("drop") or nameLower:find("collect") then
-                            local dist = (hrp.Position - v.Position).Magnitude
-                            if dist < minDist then
-                                minDist = dist
-                                nearest = v
+        task.wait(0.1)  -- Fast but not laggy
+        if autokillEnabled then
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart") then
+                local hum = char.Humanoid
+                local hrp = char.HumanoidRootPart
+                
+                -- Boost speed/jump
+                hum.WalkSpeed = killSpeed
+                hum.JumpPower = killJump
+                
+                -- Find nearest enemy
+                local closestPlayer = nil
+                local shortestDist = math.huge
+                for _, player in ipairs(Players:GetPlayers()) do
+                    if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character:FindFirstChild("HumanoidRootPart") then
+                        local targetHum = player.Character.Humanoid
+                        local targetHRP = player.Character.HumanoidRootPart
+                        if targetHum.Health > 0 then  -- Alive
+                            -- Skip same team if teams exist
+                            if not (LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team) then
+                                local dist = (hrp.Position - targetHRP.Position).Magnitude
+                                if dist < shortestDist and dist < 150 then  -- 150 stud range
+                                    shortestDist = dist
+                                    closestPlayer = player
+                                end
                             end
                         end
                     end
                 end
-                if nearest then
-                    hrp.CFrame = nearest.CFrame * CFrame.new(0, 4, 0)  -- slightly higher to avoid clipping
-                    -- Fire touch interest if exists (helps in some games)
-                    if nearest:FindFirstChildOfClass("TouchInterest") then
-                        firetouchinterest(hrp, nearest, 0)
-                        task.wait(0.05)
-                        firetouchinterest(hrp, nearest, 1)
-                    end
+                
+                -- Teleport & kill
+                if closestPlayer then
+                    local targetHRP = closestPlayer.Character.HumanoidRootPart
+                    hrp.CFrame = targetHRP.CFrame * CFrame.new(math.random(-2,2)*0.5, 2, math.random(-3,3)*0.5)  -- Offset to slash from above/behind
+                    -- Optional firetouch if part has it
+                    pcall(firetouchinterest, hrp, targetHRP, 0)
+                    task.wait(0.05)
+                    pcall(firetouchinterest, hrp, targetHRP, 1)
                 end
             end
+        else
+            -- Reset speed/jump when off
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("Humanoid") then
+                char.Humanoid.WalkSpeed = defaultSpeed
+                char.Humanoid.JumpPower = defaultJump
+            end
         end
-        task.wait(0.12)  -- smoother, less laggy than Heartbeat for farming
     end
 end)
 
--- MAIN GUI
+-- GUI (same as before, but Autokill button)
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ConiceyLoader"
 screenGui.ResetOnSpawn = false
@@ -131,33 +159,33 @@ title.TextSize = 28
 title.TextStrokeTransparency = 0.5
 title.Parent = mainFrame
 
--- Autofarm Toggle
-local autofarmBtn = Instance.new("TextButton")
-autofarmBtn.Size = UDim2.new(0.9, 0, 0, 50)
-autofarmBtn.Position = UDim2.new(0.05, 0, 0.18, 0)
-autofarmBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-autofarmBtn.Text = "🚀 Autofarm: OFF"
-autofarmBtn.TextColor3 = Color3.new(1,1,1)
-autofarmBtn.Font = Enum.Font.GothamBold
-autofarmBtn.TextSize = 20
-autofarmBtn.Parent = mainFrame
+-- Autokill Toggle
+local autokillBtn = Instance.new("TextButton")
+autokillBtn.Size = UDim2.new(0.9, 0, 0, 50)
+autokillBtn.Position = UDim2.new(0.05, 0, 0.18, 0)
+autokillBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+autokillBtn.Text = "💀 Autokill: OFF"
+autokillBtn.TextColor3 = Color3.new(1,1,1)
+autokillBtn.Font = Enum.Font.GothamBold
+autokillBtn.TextSize = 20
+autokillBtn.Parent = mainFrame
 
-local afCorner = Instance.new("UICorner")
-afCorner.CornerRadius = UDim.new(0, 12)
-afCorner.Parent = autofarmBtn
+local akCorner = Instance.new("UICorner")
+akCorner.CornerRadius = UDim.new(0, 12)
+akCorner.Parent = autokillBtn
 
-autofarmBtn.MouseButton1Click:Connect(function()
-    autofarmEnabled = not autofarmEnabled
-    autofarmBtn.Text = "🚀 Autofarm: " .. (autofarmEnabled and "ON" or "OFF")
-    autofarmBtn.BackgroundColor3 = autofarmEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(200, 0, 0)
+autokillBtn.MouseButton1Click:Connect(function()
+    autokillEnabled = not autokillEnabled
+    autokillBtn.Text = "💀 Autokill: " .. (autokillEnabled and "ON" or "OFF")
+    autokillBtn.BackgroundColor3 = autokillEnabled and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(100, 100, 100)
     StarterGui:SetCore("SendNotification", {
         Title = "Conicey Loader",
-        Text = autofarmEnabled and "Autofarm Enabled" or "Autofarm Disabled",
-        Duration = 2.5
+        Text = autokillEnabled and "Autokill ON - You'll teleport to nearest players!" or "Autokill OFF",
+        Duration = 3
     })
 end)
 
--- Webhook section
+-- Webhook (same)
 local webhookLabel = Instance.new("TextLabel")
 webhookLabel.Size = UDim2.new(0.9, 0, 0, 30)
 webhookLabel.Position = UDim2.new(0.05, 0, 0.38, 0)
@@ -202,11 +230,11 @@ sendBtn.MouseButton1Click:Connect(function()
     if webhookUrl ~= "" then
         sendWebhook()
     else
-        StarterGui:SetCore("SendNotification", {Title = "Conicey Loader", Text = "Enter a webhook URL first", Duration = 4})
+        StarterGui:SetCore("SendNotification", {Title = "Error", Text = "Enter webhook URL!", Duration = 3})
     end
 end)
 
--- Status Label
+-- Status
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Size = UDim2.new(0.9, 0, 0, 50)
 statusLabel.Position = UDim2.new(0.05, 0, 0.78, 0)
@@ -222,31 +250,32 @@ spawn(function()
         if statusLabel.Parent then
             local gems = getStat("Gems") or getStat("Coins") or getStat("Money") or "?"
             local level = getStat("Level") or "?"
-            statusLabel.Text = string.format("Gems/Coins: %s\nLevel: %s\nUptime: %s\n\nPress K to hide/show", gems, level, getUptime())
+            local status = autokillEnabled and "ON" or "OFF"
+            statusLabel.Text = string.format("Autokill: %s\nGems/Coins: %s | Level: %s\nUptime: %s\n\nPress K to toggle GUI", status, gems, level, getUptime())
         end
-        task.wait(1.5)
+        task.wait(1)
     end
 end)
 
--- Toggle GUI with K key
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
+-- K Toggle
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
     if input.KeyCode == Enum.KeyCode.K then
         guiVisible = not guiVisible
         screenGui.Enabled = guiVisible
         StarterGui:SetCore("SendNotification", {
             Title = "Conicey Loader",
-            Text = guiVisible and "GUI Shown (K to hide)" or "GUI Hidden (K to show)",
+            Text = guiVisible and "GUI Shown" or "GUI Hidden",
             Duration = 2
         })
     end
 end)
 
--- Initial notification
+-- Load notification
 StarterGui:SetCore("SendNotification", {
     Title = "⚡ Conicey Loader Loaded!",
-    Text = "Press K to toggle GUI\nAutofarm + Webhook ready",
-    Duration = 7
+    Text = "💀 Autokill ready for KAT!\nPress K to toggle | Toggle ON to kill aura",
+    Duration = 8
 })
 
-print("Conicey Loader loaded | Press K to toggle GUI")
+print("Conicey Loader | Autokill active - Toggle with GUI button!")
