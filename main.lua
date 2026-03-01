@@ -1,4 +1,6 @@
--- Conicey Loader - Autofarm (KAT Kill Aura) + K = toggle menu, L = toggle autofarm
+-- Conicey Loader - Autofarm (KAT Kill Aura: STRAFE CIRCLE + Smart Hit Detection)
+-- K = toggle menu | L = toggle autofarm
+-- Strafes around target at safe distance | Skips unkillable (god/spawn prot) auto
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -10,10 +12,39 @@ local LocalPlayer = Players.LocalPlayer
 local autofarmEnabled = false
 local guiVisible = true
 
--- IMPROVED KILL AURA LOOP
+-- Target tracking for hit detection
+local targets = {}  -- {player = {lastHealth=100, attacks=0, skipUntil=0}}
+
+local function updateTargetHealth(plr)
+    if not targets[plr] then
+        targets[plr] = {lastHealth = plr.Character.Humanoid.Health, attacks = 0, skipUntil = 0}
+    end
+    local data = targets[plr]
+    local currentHealth = plr.Character.Humanoid.Health
+    if currentHealth < data.lastHealth then
+        data.attacks = 0  -- Reset if damage dealt
+    else
+        data.attacks = data.attacks + 1
+    end
+    data.lastHealth = currentHealth
+end
+
+local function isHittable(plr)
+    if not targets[plr] then return true end
+    local data = targets[plr]
+    local now = tick()
+    if data.skipUntil > now then return false end  -- Still skipping
+    if data.attacks >= 8 then  -- Too many failed attacks
+        data.skipUntil = now + math.random(2, 5)  -- Skip 2-5 sec
+        return false
+    end
+    return true
+end
+
+-- IMPROVED STRAFE KILL AURA
 spawn(function()
     while true do
-        task.wait(0.008)  -- slightly faster, still stable
+        task.wait(0.008)
         
         if not autofarmEnabled then continue end
         
@@ -25,14 +56,14 @@ spawn(function()
         hum.WalkSpeed = 85
         hum.JumpPower = 110
         
-        -- Find nearest alive target (skip team)
+        -- Find best hittable target
         local target = nil
         local minDist = math.huge
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("Humanoid") and plr.Character:FindFirstChild("HumanoidRootPart") then
                 local tHum = plr.Character.Humanoid
                 local tHrp = plr.Character.HumanoidRootPart
-                if tHum.Health > 0.1 then
+                if tHum.Health > 0.1 and isHittable(plr) then
                     if not (LocalPlayer.Team and plr.Team and LocalPlayer.Team == plr.Team) then
                         local dist = (hrp.Position - tHrp.Position).Magnitude
                         if dist < minDist and dist < 220 then
@@ -44,13 +75,16 @@ spawn(function()
             end
         end
         
-        if not target or not target.Character then continue end
+        if not target then continue end
         
         local targetHrp = target.Character.HumanoidRootPart
         local targetHum = target.Character.Humanoid
         
-        -- Better knife equip (more names checked)
-        local knifeNames = {"Knife", "knife", "Default Knife", "KAT Knife", "Classic Knife"}
+        -- Update hit tracking
+        updateTargetHealth(target)
+        
+        -- Knife equip (expanded names)
+        local knifeNames = {"Knife", "knife", "Default Knife", "KAT Knife", "Classic Knife", "Tool"}
         local knife = nil
         for _, name in ipairs(knifeNames) do
             knife = char:FindFirstChild(name) or LocalPlayer.Backpack:FindFirstChild(name)
@@ -61,31 +95,38 @@ spawn(function()
             hum:EquipTool(knife)
         end
         
-        -- Improved teleport: small prediction + varied spin
-        local lookVector = targetHrp.CFrame.LookVector * 1.8   -- slight prediction forward
-        local offset = CFrame.new(0, -2.8, -2.8) + lookVector
-        local spin = CFrame.Angles(0, math.rad(math.random(-220, 220)), math.rad(math.random(-15, 15)))
-        hrp.CFrame = targetHrp.CFrame * offset * spin
+        -- STRAFE CIRCLE (safe distance, smooth orbit)
+        local strafeDist = 10  -- studs away
+        local strafeSpeed = 4  -- orbit speed
+        local angle = (tick() * strafeSpeed) % (math.pi * 2)
+        local strafeOffset = Vector3.new(math.cos(angle) * strafeDist, 0, math.sin(angle) * strafeDist)
+        local strafePos = targetHrp.Position + strafeOffset
         
-        -- Camera lock
+        -- Face target + slight up/down variation
+        local faceCFrame = CFrame.lookAt(strafePos, targetHrp.Position + Vector3.new(0, 2, 0))
+        local tiltSpin = CFrame.Angles(math.rad(math.sin(angle * 2) * 10), math.rad(math.random(-20, 20)), 0)
+        
+        hrp.CFrame = faceCFrame * tiltSpin
+        
+        -- Camera follows strafe
         workspace.CurrentCamera.CameraSubject = targetHum
         
-        -- Faster & more reliable click spam
+        -- Click spam
         pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)   -- press left
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
             task.wait(0.004)
-            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)  -- release
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
             task.wait(0.003)
         end)
         
-        -- Extra touch interest (helps in some cases)
+        -- Touch interest
         pcall(firetouchinterest, hrp, targetHrp, 0)
         task.wait(0.006)
         pcall(firetouchinterest, hrp, targetHrp, 1)
     end
 end)
 
--- GUI (same working style)
+-- GUI (unchanged, working)
 local pg = game.Players.LocalPlayer:WaitForChild("PlayerGui")
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ConiceyLoader"
@@ -122,29 +163,22 @@ title.TextSize = 32
 title.TextStrokeTransparency = 0.5
 title.Parent = mainFrame
 
--- Autofarm Toggle
+-- Autofarm Toggle Button (visual sync)
 local autofarmBtn = Instance.new("TextButton")
 autofarmBtn.Size = UDim2.new(0.9, 0, 0, 60)
 autofarmBtn.Position = UDim2.new(0.05, 0, 0.4, 0)
-autofarmBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-autofarmBtn.Text = "💀 Autofarm: OFF"
+autofarmBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+autofarmBtn.Text = "💀 Autofarm: OFF (L Key)"
 autofarmBtn.TextColor3 = Color3.new(1,1,1)
 autofarmBtn.Font = Enum.Font.GothamBold
-autofarmBtn.TextSize = 24
+autofarmBtn.TextSize = 20
 autofarmBtn.Parent = mainFrame
 
 local btnCorner = Instance.new("UICorner")
 btnCorner.CornerRadius = UDim.new(0, 12)
 btnCorner.Parent = autofarmBtn
 
-autofarmBtn.MouseButton1Click:Connect(function()
-    autofarmEnabled = not autofarmEnabled
-    autofarmBtn.Text = "💀 Autofarm: " .. (autofarmEnabled and "ON" or "OFF")
-    autofarmBtn.BackgroundColor3 = autofarmEnabled and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(100, 100, 100)
-end)
-
--- K = toggle menu visibility
--- L = toggle autofarm
+-- Controls
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     
@@ -153,14 +187,19 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         screenGui.Enabled = guiVisible
     elseif input.KeyCode == Enum.KeyCode.L then
         autofarmEnabled = not autofarmEnabled
-        autofarmBtn.Text = "💀 Autofarm: " .. (autofarmEnabled and "ON" or "OFF")
+        autofarmBtn.Text = "💀 Autofarm: " .. (autofarmEnabled and "ON" or "OFF") .. " (L Key)"
         autofarmBtn.BackgroundColor3 = autofarmEnabled and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(100, 100, 100)
+        StarterGui:SetCore("SendNotification", {
+            Title = "Autofarm",
+            Text = autofarmEnabled and "ON - Strafing + killing" or "OFF",
+            Duration = 2
+        })
     end
 end)
 
--- Load notification
+-- Load
 StarterGui:SetCore("SendNotification", {
     Title = "⚡ Conicey Loader",
-    Text = "Menu: K to show/hide\nAutofarm: L to toggle\n(Improved killing)",
+    Text = "K = toggle menu | L = toggle autofarm\nStrafes around + skips unkillable",
     Duration = 8
 })
