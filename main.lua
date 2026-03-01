@@ -1,4 +1,4 @@
--- Katt Hub v2 - Autofarm + Webhook (Works in PlayerGui, No Key, Instant Load)
+-- Conicey Loader - Autofarm + Webhook (Works in PlayerGui, Instant Load)
 -- For games with collectibles (Coins/Gems/Orbs) in Workspace + leaderstats Gems/Coins/Level
 -- Toggle Autofarm: Teleports & collects nearest items automatically
 -- Webhook: Logs username, gems/coins, level, uptime to Discord
@@ -42,7 +42,7 @@ local function sendWebhook()
     local level = getStat("Level") or 0
     local embed = {
         embeds = {{
-            title = "Katt Hub Log",
+            title = "Conicey Loader Log",
             description = string.format(
                 "**Player:** %s\n**Gems/Coins:** %d\n**Level:** %d\n**Uptime:** %s",
                 LocalPlayer.Name, gems, level, getUptime()
@@ -72,7 +72,7 @@ local function sendWebhook()
         end
     end)
     if success then
-        StarterGui:SetCore("SendNotification", {Title = "Webhook", Text = "Log sent!", Duration = 3})
+        StarterGui:SetCore("SendNotification", {Title = "Conicey Loader", Text = "Log sent!", Duration = 3})
     end
 end
 
@@ -103,9 +103,9 @@ spawn(function()
     end
 end)
 
--- MAIN GUI (BIG, BRIGHT, in PlayerGui - IMPOSSIBLE TO MISS)
+-- MAIN GUI (BIG, BRIGHT, in PlayerGui)
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "KattHub"
+screenGui.Name = "ConiceyLoader"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder = 1000000
@@ -131,8 +131,8 @@ stroke.Parent = mainFrame
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 60)
 title.BackgroundTransparency = 1
-title.Text = "🗡️ Katt Hub - Loaded!"
-title.TextColor3 = Color3.fromRGB(255, 200, 0)
+title.Text = "⚡ Conicey Loader - Loaded!"
+title.TextColor3 = Color3.fromRGB(100, 200, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 28
 title.TextStrokeTransparency = 0.5
@@ -158,8 +158,8 @@ autofarmBtn.MouseButton1Click:Connect(function()
     autofarmBtn.Text = "🚀 Autofarm: " .. (autofarmEnabled and "ON" or "OFF")
     autofarmBtn.BackgroundColor3 = autofarmEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
     StarterGui:SetCore("SendNotification", {
-        Title = "Autofarm",
-        Text = autofarmEnabled and "Enabled!" or "Disabled!",
+        Title = "Conicey Loader",
+        Text = autofarmEnabled and "Autofarm Enabled!" or "Autofarm Disabled!",
         Duration = 2
     })
 end)
@@ -249,9 +249,9 @@ end)
 
 -- Confirmation Notification
 StarterGui:SetCore("SendNotification", {
-    Title = "🗡️ Katt Hub Loaded!",
-    Text = "Big blue GUI in center!\nAutofarm toggle + Webhook ready.\nWorks in most simulators!",
+    Title = "⚡ Conicey Loader Loaded!",
+    Text = "GUI ready in center of screen!\nToggle Autofarm + set Webhook.\nWorks in most simulators!",
     Duration = 8
 })
 
-print("Katt Hub v2 loaded - Autofarm & Webhook active!")
+print("Conicey Loader loaded - Autofarm & Webhook active!")
