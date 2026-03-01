@@ -1,6 +1,6 @@
 -- Conicey Loader - Autofarm (KAT Kill Aura: STRAFE CIRCLE + Smart Hit Detection)
--- K = toggle menu | L = toggle autofarm
--- Strafes around target at safe distance | Skips unkillable (god/spawn prot) auto
+-- K = toggle menu visibility | L = toggle autofarm
+-- Added small red X button (top-right) → fully closes/destroys the script & GUI
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -22,7 +22,7 @@ local function updateTargetHealth(plr)
     local data = targets[plr]
     local currentHealth = plr.Character.Humanoid.Health
     if currentHealth < data.lastHealth then
-        data.attacks = 0  -- Reset if damage dealt
+        data.attacks = 0
     else
         data.attacks = data.attacks + 1
     end
@@ -33,15 +33,15 @@ local function isHittable(plr)
     if not targets[plr] then return true end
     local data = targets[plr]
     local now = tick()
-    if data.skipUntil > now then return false end  -- Still skipping
-    if data.attacks >= 8 then  -- Too many failed attacks
-        data.skipUntil = now + math.random(2, 5)  -- Skip 2-5 sec
+    if data.skipUntil > now then return false end
+    if data.attacks >= 8 then
+        data.skipUntil = now + math.random(2, 5)
         return false
     end
     return true
 end
 
--- IMPROVED STRAFE KILL AURA
+-- STRAFE KILL AURA LOOP
 spawn(function()
     while true do
         task.wait(0.008)
@@ -80,10 +80,9 @@ spawn(function()
         local targetHrp = target.Character.HumanoidRootPart
         local targetHum = target.Character.Humanoid
         
-        -- Update hit tracking
         updateTargetHealth(target)
         
-        -- Knife equip (expanded names)
+        -- Knife equip
         local knifeNames = {"Knife", "knife", "Default Knife", "KAT Knife", "Classic Knife", "Tool"}
         local knife = nil
         for _, name in ipairs(knifeNames) do
@@ -95,20 +94,18 @@ spawn(function()
             hum:EquipTool(knife)
         end
         
-        -- STRAFE CIRCLE (safe distance, smooth orbit)
-        local strafeDist = 10  -- studs away
-        local strafeSpeed = 4  -- orbit speed
+        -- STRAFE CIRCLE
+        local strafeDist = 10
+        local strafeSpeed = 4
         local angle = (tick() * strafeSpeed) % (math.pi * 2)
         local strafeOffset = Vector3.new(math.cos(angle) * strafeDist, 0, math.sin(angle) * strafeDist)
         local strafePos = targetHrp.Position + strafeOffset
         
-        -- Face target + slight up/down variation
         local faceCFrame = CFrame.lookAt(strafePos, targetHrp.Position + Vector3.new(0, 2, 0))
         local tiltSpin = CFrame.Angles(math.rad(math.sin(angle * 2) * 10), math.rad(math.random(-20, 20)), 0)
         
         hrp.CFrame = faceCFrame * tiltSpin
         
-        -- Camera follows strafe
         workspace.CurrentCamera.CameraSubject = targetHum
         
         -- Click spam
@@ -119,14 +116,14 @@ spawn(function()
             task.wait(0.003)
         end)
         
-        -- Touch interest
+        -- Touch
         pcall(firetouchinterest, hrp, targetHrp, 0)
         task.wait(0.006)
         pcall(firetouchinterest, hrp, targetHrp, 1)
     end
 end)
 
--- GUI (unchanged, working)
+-- GUI
 local pg = game.Players.LocalPlayer:WaitForChild("PlayerGui")
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ConiceyLoader"
@@ -163,7 +160,7 @@ title.TextSize = 32
 title.TextStrokeTransparency = 0.5
 title.Parent = mainFrame
 
--- Autofarm Toggle Button (visual sync)
+-- Autofarm Toggle Button
 local autofarmBtn = Instance.new("TextButton")
 autofarmBtn.Size = UDim2.new(0.9, 0, 0, 60)
 autofarmBtn.Position = UDim2.new(0.05, 0, 0.4, 0)
@@ -178,7 +175,34 @@ local btnCorner = Instance.new("UICorner")
 btnCorner.CornerRadius = UDim.new(0, 12)
 btnCorner.Parent = autofarmBtn
 
--- Controls
+-- RED X BUTTON - top right - FULLY CLOSES SCRIPT
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 30, 0, 30)
+closeBtn.Position = UDim2.new(1, -35, 0, 5)
+closeBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.new(1,1,1)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 20
+closeBtn.Parent = mainFrame
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 8)
+closeCorner.Parent = closeBtn
+
+closeBtn.MouseButton1Click:Connect(function()
+    -- Fully destroy GUI and stop script
+    screenGui:Destroy()
+    -- Optional: clear variables or disconnect loops if needed
+    autofarmEnabled = false
+    StarterGui:SetCore("SendNotification", {
+        Title = "Conicey Loader",
+        Text = "Script closed (X button)",
+        Duration = 4
+    })
+end)
+
+-- Controls: K = menu toggle | L = autofarm toggle
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     
@@ -197,9 +221,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- Load
+-- Load notification
 StarterGui:SetCore("SendNotification", {
     Title = "⚡ Conicey Loader",
-    Text = "K = toggle menu | L = toggle autofarm\nStrafes around + skips unkillable",
+    Text = "K = menu | L = autofarm toggle\nRed X = close script fully",
     Duration = 8
 })
