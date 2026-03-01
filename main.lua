@@ -1,6 +1,6 @@
 -- Conicey Loader - Autofarm (KAT Kill Aura: STRAFE CIRCLE + Smart Hit Detection)
--- K = toggle menu visibility | L = toggle autofarm
--- Added small red X button (top-right) → fully closes/destroys the script & GUI
+-- K = toggle menu | L = toggle autofarm | Red X = fully close script
+-- + ALWAYS ACTIVE STAFF DETECTOR (stolen from KATT Hub logic)
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -12,8 +12,88 @@ local LocalPlayer = Players.LocalPlayer
 local autofarmEnabled = false
 local guiVisible = true
 
--- Target tracking for hit detection
-local targets = {}  -- {player = {lastHealth=100, attacks=0, skipUntil=0}}
+-- ════════════════════════════════════════════════════════════════════════
+-- STAFF DETECTOR (exact KATT-style logic, always active)
+-- ════════════════════════════════════════════════════════════════════════
+
+local STAFF_GROUP_ID = 0          -- ← CHANGE THIS to your Roblox group ID if you want rank check (0 = disabled)
+local MIN_STAFF_RANK = 100        -- minimum rank in group to count as staff
+
+local STAFF_KEYWORDS = {
+    "admin", "mod", "owner", "dev", "developer", "staff", "moderator",
+    "roblox", "official", "team", "support", "creator"
+}
+
+local function isStaff(player)
+    if player == LocalPlayer then return false end
+
+    -- Creator / Game owner
+    if player.UserId == game.CreatorId then
+        return true, "Game Creator / Owner"
+    end
+
+    -- Group rank
+    if STAFF_GROUP_ID > 0 then
+        local success, rank = pcall(function()
+            return player:GetRankInGroup(STAFF_GROUP_ID)
+        end)
+        if success and rank >= MIN_STAFF_RANK then
+            return true, "Group Rank " .. rank .. "+"
+        end
+    end
+
+    -- Username / DisplayName keywords
+    local nameLower = player.Name:lower()
+    local displayLower = player.DisplayName:lower()
+    for _, keyword in ipairs(STAFF_KEYWORDS) do
+        if nameLower:find(keyword) or displayLower:find(keyword) then
+            return true, "Name pattern: " .. keyword
+        end
+    end
+
+    return false
+end
+
+local function notifyStaff(player, reason)
+    local msg = "STAFF DETECTED: " .. player.Name .. " (" .. player.UserId .. ")\nReason: " .. reason
+
+    print("[STAFF ALERT] " .. msg)
+
+    StarterGui:SetCore("SendNotification", {
+        Title = "⚠️ STAFF / ADMIN JOINED ⚠️",
+        Text = msg .. "\nBe careful – they might be watching!",
+        Duration = 20,
+        Icon = "rbxassetid://7072721039"  -- warning icon
+    })
+end
+
+-- Always-active: New players
+Players.PlayerAdded:Connect(function(player)
+    task.wait(1.5)  -- wait for rank/name to load
+    local isStaffBool, reason = isStaff(player)
+    if isStaffBool then
+        notifyStaff(player, reason)
+    end
+end)
+
+-- Check existing players (in case you join after them)
+for _, player in ipairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer then
+        task.spawn(function()
+            task.wait(2)
+            local isStaffBool, reason = isStaff(player)
+            if isStaffBool then
+                notifyStaff(player, reason)
+            end
+        end)
+    end
+end
+
+-- ════════════════════════════════════════════════════════════════════════
+-- TARGET HIT DETECTION (for autofarm)
+-- ════════════════════════════════════════════════════════════════════════
+
+local targets = {}
 
 local function updateTargetHealth(plr)
     if not targets[plr] then
@@ -41,7 +121,10 @@ local function isHittable(plr)
     return true
 end
 
+-- ════════════════════════════════════════════════════════════════════════
 -- STRAFE KILL AURA LOOP
+-- ════════════════════════════════════════════════════════════════════════
+
 spawn(function()
     while true do
         task.wait(0.008)
@@ -56,7 +139,6 @@ spawn(function()
         hum.WalkSpeed = 85
         hum.JumpPower = 110
         
-        -- Find best hittable target
         local target = nil
         local minDist = math.huge
         for _, plr in ipairs(Players:GetPlayers()) do
@@ -82,7 +164,6 @@ spawn(function()
         
         updateTargetHealth(target)
         
-        -- Knife equip
         local knifeNames = {"Knife", "knife", "Default Knife", "KAT Knife", "Classic Knife", "Tool"}
         local knife = nil
         for _, name in ipairs(knifeNames) do
@@ -94,7 +175,6 @@ spawn(function()
             hum:EquipTool(knife)
         end
         
-        -- STRAFE CIRCLE
         local strafeDist = 10
         local strafeSpeed = 4
         local angle = (tick() * strafeSpeed) % (math.pi * 2)
@@ -108,7 +188,6 @@ spawn(function()
         
         workspace.CurrentCamera.CameraSubject = targetHum
         
-        -- Click spam
         pcall(function()
             VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
             task.wait(0.004)
@@ -116,14 +195,16 @@ spawn(function()
             task.wait(0.003)
         end)
         
-        -- Touch
         pcall(firetouchinterest, hrp, targetHrp, 0)
         task.wait(0.006)
         pcall(firetouchinterest, hrp, targetHrp, 1)
     end
 end)
 
+-- ════════════════════════════════════════════════════════════════════════
 -- GUI
+-- ════════════════════════════════════════════════════════════════════════
+
 local pg = game.Players.LocalPlayer:WaitForChild("PlayerGui")
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ConiceyLoader"
@@ -175,7 +256,7 @@ local btnCorner = Instance.new("UICorner")
 btnCorner.CornerRadius = UDim.new(0, 12)
 btnCorner.Parent = autofarmBtn
 
--- RED X BUTTON - top right - FULLY CLOSES SCRIPT
+-- RED X BUTTON - top right - FULL CLOSE
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 30, 0, 30)
 closeBtn.Position = UDim2.new(1, -35, 0, 5)
@@ -191,13 +272,11 @@ closeCorner.CornerRadius = UDim.new(0, 8)
 closeCorner.Parent = closeBtn
 
 closeBtn.MouseButton1Click:Connect(function()
-    -- Fully destroy GUI and stop script
     screenGui:Destroy()
-    -- Optional: clear variables or disconnect loops if needed
     autofarmEnabled = false
     StarterGui:SetCore("SendNotification", {
         Title = "Conicey Loader",
-        Text = "Script closed (X button)",
+        Text = "Script fully closed",
         Duration = 4
     })
 end)
@@ -224,6 +303,8 @@ end)
 -- Load notification
 StarterGui:SetCore("SendNotification", {
     Title = "⚡ Conicey Loader",
-    Text = "K = menu | L = autofarm toggle\nRed X = close script fully",
+    Text = "K = menu | L = autofarm | Red X = close\nStaff detector active (KATT-style)",
     Duration = 8
 })
+
+print("[Conicey Loader] Loaded | Staff detector active")
