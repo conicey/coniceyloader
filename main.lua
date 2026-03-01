@@ -1,3 +1,10 @@
+print("Conicey Loader DEBUG: Script started executing at " .. os.date("%H:%M:%S"))
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "DEBUG - Conicey Loader",
+    Text = "Script is RUNNING. If no GUI → enable 'Draw GUI' / 'UI Rendering' in executor settings!",
+    Duration = 15,
+    Icon = "rbxassetid://7072718362"
+})
 -- Conicey Loader - Autofarm/Kill Aura (Identical to base: equip knife + teleport close + spin + click spam)
 -- Toggle GUI with K | Autofarm = Kill Aura in KAT/PvP games
 
